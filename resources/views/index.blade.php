@@ -8,7 +8,7 @@
 
 <body>
 
-<h2>Upload Bill Shopee</h2>
+<h2>Upload Bill TikTok</h2>
 
 <form action="{{ route('upload') }}" method="POST" enctype="multipart/form-data">
 
