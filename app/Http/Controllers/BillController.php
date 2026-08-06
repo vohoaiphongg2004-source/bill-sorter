@@ -120,8 +120,10 @@ foreach ($sorted as $bill) {
         ];
 
     });
-
-return view('result', compact('groups'));
+$pageList = collect($sorted)
+    ->pluck('page')
+    ->implode(',');
+return view('result', compact('groups', 'pageList'));
     }
 
     private function extractProduct($text)

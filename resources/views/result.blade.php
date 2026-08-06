@@ -42,7 +42,35 @@ button{
 <body>
 
 <h2>Danh sách trang cần in</h2>
+<h2>Thứ tự trang cần in</h2>
 
+<input
+    type="text"
+    id="pageList"
+    value="{{ $pageList }}"
+    readonly
+    style="width:100%;padding:10px;font-size:16px;"
+>
+
+<br><br>
+
+<button onclick="copyPages()">📋 Sao chép</button>
+
+<span id="copied" style="color:green;margin-left:10px;"></span>
+
+<script>
+function copyPages() {
+    const input = document.getElementById('pageList');
+    input.select();
+    input.setSelectionRange(0, 99999);
+
+    navigator.clipboard.writeText(input.value);
+
+    document.getElementById('copied').innerText = 'Đã sao chép!';
+}
+</script>
+
+<hr>
 <table>
 
 <tr>
