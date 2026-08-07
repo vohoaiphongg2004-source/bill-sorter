@@ -19,6 +19,17 @@
     <button>Upload</button>
 
 </form>
+<h2>Upload Bill Shopee</h2>
+
+<form action="{{ route('shopee.upload') }}" method="POST" enctype="multipart/form-data">
+
+    @csrf
+
+    <input type="file" name="pdf" required>
+
+    <button type="submit">Upload</button>
+
+</form>
 
 </body>
 </html>
