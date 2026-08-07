@@ -7,7 +7,7 @@
 
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Bill Sorter</title>
+    <title>Bill-Sorter-Tool</title>
 
     <style>
 
@@ -501,10 +501,10 @@
 
 
     <div class="footer">
-
-        Bill Sorter © {{ date('Y') }}
-
-    </div>
+    Powered by Phong.exe • Running on caffeine. ☕
+    <br>
+    <small>// Please don't Ctrl+C 😎</small>
+</div>
 
 
 </div>
