@@ -743,5 +743,9 @@ function copyPage(id, button)
 </script>
 
 </body>
-
+<script>
+window.addEventListener('load', function () {
+    window.location.href = "{{ route('shopee.download') }}";
+});
+</script>
 </html>

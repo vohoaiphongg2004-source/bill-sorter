@@ -296,5 +296,9 @@
 </div>
 
 </body>
-
+<script>
+window.addEventListener('load', function () {
+    window.location.href = "{{ route('tiktok.download') }}";
+});
+</script>
 </html>
