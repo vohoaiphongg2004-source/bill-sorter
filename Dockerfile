@@ -1,9 +1,14 @@
 FROM php:8.2-cli
 
 RUN apt-get update && apt-get install -y \
-    git unzip zip libzip-dev \
+    git \
+    unzip \
+    zip \
+    libzip-dev \
     poppler-utils \
-    && docker-php-ext-install zip
+    qpdf \
+    && docker-php-ext-install zip \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
@@ -20,7 +25,7 @@ RUN php artisan config:clear
 RUN php artisan route:clear
 RUN php artisan view:clear
 
-# Tăng giới hạn xử lý PDF
+# Giới hạn upload / xử lý PDF
 RUN echo "upload_max_filesize=50M" > /usr/local/etc/php/conf.d/uploads.ini \
     && echo "post_max_size=50M" >> /usr/local/etc/php/conf.d/uploads.ini \
     && echo "memory_limit=512M" >> /usr/local/etc/php/conf.d/uploads.ini \

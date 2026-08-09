@@ -4,178 +4,1812 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Process;
 use Smalot\PdfParser\Parser;
-use setasign\Fpdi\Fpdi;
+
 class BillController extends Controller
 {
+    /*
+    |--------------------------------------------------------------------------
+    | Trang chính
+    |--------------------------------------------------------------------------
+    */
+
     public function index()
     {
         return view('index');
     }
 
 
-
-private function compareSku($skuA, $skuB)
+    /*
+    |--------------------------------------------------------------------------
+    | Upload 1 hoặc nhiều PDF TikTok
+    | Ghép -> đọc -> sắp xếp -> tạo PDF
+    |--------------------------------------------------------------------------
+    */
+private function extractOrderId($text)
 {
-    // Lấy số đầu chuỗi nếu có
-    preg_match('/^\d+/', $skuA, $matchA);
-    preg_match('/^\d+/', $skuB, $matchB);
-
-    $numA = isset($matchA[0]) ? (int)$matchA[0] : null;
-    $numB = isset($matchB[0]) ? (int)$matchB[0] : null;
-
-    // Cả hai đều bắt đầu bằng số
-    if ($numA !== null && $numB !== null) {
-        if ($numA != $numB) {
-            return $numA <=> $numB;
-        }
+    if (empty($text)) {
+        return null;
     }
 
-    // Nếu một cái có số đầu, một cái không
-    if ($numA !== null && $numB === null) {
-        return -1;
+    /*
+    |--------------------------------------------------------------------------
+    | Tìm Order ID
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        preg_match(
+            '/Order\s*ID\s*:\s*(\d{10,})/i',
+            $text,
+            $match
+        )
+    ) {
+
+        return trim($match[1]);
     }
 
-    if ($numA === null && $numB !== null) {
-        return 1;
-    }
-
-    // So sánh chữ
-    return strnatcasecmp($skuA, $skuB);
+    return null;
 }
     public function upload(Request $request)
-    {
-        $request->validate([
-            'pdf' => 'required|mimes:pdf'
-        ]);
+{
+    /*
+    |--------------------------------------------------------------------------
+    | Cho phép upload 1 hoặc nhiều PDF
+    |--------------------------------------------------------------------------
+    */
 
-        // Upload file
-        $path = $request->file('pdf')->store('pdf', 'local');
-        $fullPath = Storage::disk('local')->path($path);
+    $request->validate([
+        'pdf' => 'required|array|min:1',
+        'pdf.*' => 'required|file|mimes:pdf|max:51200',
+    ]);
 
-        // Đọc PDF
-        $parser = new Parser();
-        $pdf = $parser->parseFile($fullPath);
-        $pages = $pdf->getPages();
+    $files = $request->file('pdf');
 
-        $bills = [];
+    /*
+    |--------------------------------------------------------------------------
+    | Thư mục làm việc
+    |--------------------------------------------------------------------------
+    */
 
-        foreach ($pages as $index => $page) {
+    $workDir = storage_path('app/pdf-sorter');
 
-            $text = $page->getText();
+    if (!is_dir($workDir)) {
+        mkdir($workDir, 0777, true);
+    }
 
-            $info = $this->extractProduct($text);
+    /*
+    |--------------------------------------------------------------------------
+    | Lưu PDF upload
+    |--------------------------------------------------------------------------
+    */
 
-            $bills[] = [
-                'page'    => $index + 1,
-                'product' => $info['product'],
-                'sku'     => $info['sku'],
-                'qty'     => $info['qty'],
-                'multi'   => $info['multi'],
-            ];
+    $inputPaths = [];
+
+    foreach ($files as $file) {
+
+        $filename =
+            'tiktok_' .
+            uniqid() .
+            '.pdf';
+
+        $path = $file->storeAs(
+            'pdf-sorter',
+            $filename,
+            'local'
+        );
+
+        $inputPaths[] =
+            Storage::disk('local')->path($path);
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Nếu chỉ có 1 PDF
+    |--------------------------------------------------------------------------
+    */
+
+    if (count($inputPaths) === 1) {
+
+        $inputPdf = $inputPaths[0];
+
+    } else {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Nếu nhiều PDF -> ghép
+        |--------------------------------------------------------------------------
+        */
+
+        $inputPdf =
+            $workDir .
+            DIRECTORY_SEPARATOR .
+            'tiktok_merged_' .
+            uniqid() .
+            '.pdf';
+
+        $this->mergePdf(
+            $inputPaths,
+            $inputPdf
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Kiểm tra PDF
+    |--------------------------------------------------------------------------
+    */
+
+    if (!file_exists($inputPdf)) {
+
+        throw new \Exception(
+            'Không tìm thấy PDF TikTok sau khi upload/ghép.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Đọc PDF
+    |--------------------------------------------------------------------------
+    */
+
+    $parser = new Parser();
+
+    try {
+
+        $pdf = $parser->parseFile($inputPdf);
+
+    } catch (\Throwable $e) {
+
+        throw new \Exception(
+            'Không thể đọc file PDF TikTok: ' .
+            $e->getMessage()
+        );
+    }
+
+    $pdfPages = $pdf->getPages();
+
+    if (empty($pdfPages)) {
+
+        throw new \Exception(
+            'PDF TikTok không có trang nào.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | BƯỚC QUAN TRỌNG:
+    |
+    | Gom các trang thành BILL theo Order ID
+    |--------------------------------------------------------------------------
+    */
+
+    $billGroups = [];
+
+    $currentGroup = null;
+
+    foreach ($pdfPages as $index => $page) {
+
+        $pageNumber = $index + 1;
+
+        $text = $page->getText();
+
+        /*
+        |--------------------------------------------------------------------------
+        | Lấy Order ID của page
+        |--------------------------------------------------------------------------
+        */
+
+        $orderId =
+            $this->extractOrderId($text);
+
+        /*
+        |--------------------------------------------------------------------------
+        | Nếu chưa có Order ID
+        |
+        | Có thể là page tiếp theo của bill trước.
+        |--------------------------------------------------------------------------
+        */
+
+        if ($orderId === null) {
+
+            if ($currentGroup !== null) {
+
+                $currentGroup['pages'][] =
+                    $pageNumber;
+
+                $currentGroup['texts'][] =
+                    $text;
+            }
+
+            continue;
         }
-$sorted = collect($bills)
+
+        /*
+        |--------------------------------------------------------------------------
+        | Nếu đang cùng Order ID
+        |
+        | => Đây vẫn là cùng một BILL
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $currentGroup !== null &&
+            $currentGroup['order_id'] === $orderId
+        ) {
+
+            $currentGroup['pages'][] =
+                $pageNumber;
+
+            $currentGroup['texts'][] =
+                $text;
+
+            continue;
+        }
+
+        /*
+        |--------------------------------------------------------------------------
+        | BILL mới
+        |--------------------------------------------------------------------------
+        */
+
+        if ($currentGroup !== null) {
+
+            $billGroups[] =
+                $currentGroup;
+        }
+
+        $currentGroup = [
+
+            'order_id' =>
+                $orderId,
+
+            'pages' => [
+
+                $pageNumber
+
+            ],
+
+            'texts' => [
+
+                $text
+
+            ],
+
+        ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Thêm bill cuối
+    |--------------------------------------------------------------------------
+    */
+
+    if ($currentGroup !== null) {
+
+        $billGroups[] =
+            $currentGroup;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Không tìm thấy bill
+    |--------------------------------------------------------------------------
+    */
+
+    if (empty($billGroups)) {
+
+        throw new \Exception(
+            'Không tìm thấy Order ID trong PDF TikTok.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Phân tích từng BILL
+    |--------------------------------------------------------------------------
+    */
+
+    $bills = [];
+
+    foreach ($billGroups as $group) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Ghép text tất cả page của bill
+        |--------------------------------------------------------------------------
+        */
+
+        $fullText =
+            implode(
+                "\n",
+                $group['texts']
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Đọc product
+        |--------------------------------------------------------------------------
+        */
+
+        $info =
+            $this->extractProduct(
+                $fullText
+            );
+
+        /*
+        |--------------------------------------------------------------------------
+        | Bill không đọc được
+        |--------------------------------------------------------------------------
+        */
+
+        $unknown =
+            trim($info['product']) === '';
+
+        /*
+        |--------------------------------------------------------------------------
+        | Lưu BILL
+        |--------------------------------------------------------------------------
+        |
+        | LƯU Ý:
+        | pages là toàn bộ trang của bill.
+        |
+        */
+
+        $bills[] = [
+
+            'order_id' =>
+                $group['order_id'],
+
+            'pages' =>
+                $group['pages'],
+
+            'page' =>
+                $group['pages'][0],
+
+            'product' =>
+                $info['product'],
+
+            'sku' =>
+                $info['sku'],
+
+            'qty' =>
+                $info['qty'],
+
+            'multi' =>
+                $info['multi'],
+
+            'unknown' =>
+                $unknown,
+
+        ];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SORT BILL
+    |--------------------------------------------------------------------------
+    |
+    | 1. Bill đọc được trước
+    | 2. Bill 1 sản phẩm
+    | 3. Product
+    | 4. SKU
+    | 5. Qty
+    | 6. Bill nhiều sản phẩm xuống cuối
+    |
+    */
+
+    $sorted = collect($bills)
     ->sort(function ($a, $b) {
 
-        // 1. Product
-        $compareProduct = strnatcasecmp($a['product'], $b['product']);
+        /*
+        |--------------------------------------------------------------------------
+        | 1. Bill không đọc được -> cuối cùng
+        |--------------------------------------------------------------------------
+        */
+
+        if ($a['unknown'] !== $b['unknown']) {
+
+            return $a['unknown'] ? 1 : -1;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | 2. Bill nhiều sản phẩm -> ĐẨY LÊN ĐẦU
+        |--------------------------------------------------------------------------
+        |
+        | multi = true:
+        | - Bill có từ 2 sản phẩm trở lên
+        | - Ví dụ: Bộ thanh sơn 8 món
+        |
+        */
+
+        if ($a['multi'] !== $b['multi']) {
+
+            return $a['multi'] ? -1 : 1;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | 3. Nếu cả hai đều là bill nhiều sản phẩm
+        | hoặc đều là bill một sản phẩm
+        |
+        | Giữ nguyên logic sắp xếp Product
+        |--------------------------------------------------------------------------
+        */
+
+        if ($a['multi'] && $b['multi']) {
+
+            /*
+            |----------------------------------------------------------------------
+            | Bill multi:
+            | ưu tiên Product
+            |----------------------------------------------------------------------
+            */
+
+            $compareProduct = strnatcasecmp(
+                $a['product'],
+                $b['product']
+            );
+
+            if ($compareProduct !== 0) {
+
+                return $compareProduct;
+            }
+
+
+            /*
+            |----------------------------------------------------------------------
+            | SKU
+            |----------------------------------------------------------------------
+            */
+
+            $compareSku = $this->compareSku(
+                $a['sku'],
+                $b['sku']
+            );
+
+            if ($compareSku !== 0) {
+
+                return $compareSku;
+            }
+
+
+            /*
+            |----------------------------------------------------------------------
+            | Qty
+            |----------------------------------------------------------------------
+            */
+
+            if ($a['qty'] !== $b['qty']) {
+
+                return $a['qty'] <=> $b['qty'];
+            }
+
+
+            /*
+            |----------------------------------------------------------------------
+            | Nếu giống nhau -> giữ thứ tự trang gốc
+            |----------------------------------------------------------------------
+            */
+
+            return $a['page'] <=> $b['page'];
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | 4. Bill một sản phẩm
+        |--------------------------------------------------------------------------
+        */
+
+        $compareProduct = strnatcasecmp(
+            $a['product'],
+            $b['product']
+        );
 
         if ($compareProduct !== 0) {
+
             return $compareProduct;
         }
 
-        // 2. SKU
-        $compareSku = $this->compareSku($a['sku'], $b['sku']);
+
+        /*
+        |--------------------------------------------------------------------------
+        | SKU
+        |--------------------------------------------------------------------------
+        */
+
+        $compareSku = $this->compareSku(
+            $a['sku'],
+            $b['sku']
+        );
 
         if ($compareSku !== 0) {
+
             return $compareSku;
         }
 
-        // 3. Qty
-        return $a['qty'] <=> $b['qty'];
 
+        /*
+        |--------------------------------------------------------------------------
+        | Qty
+        |--------------------------------------------------------------------------
+        */
+
+        if ($a['qty'] !== $b['qty']) {
+
+            return $a['qty'] <=> $b['qty'];
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Giống hoàn toàn -> giữ thứ tự trang gốc
+        |--------------------------------------------------------------------------
+        */
+
+        return $a['page'] <=> $b['page'];
     })
     ->values();
-    
-    
-        $single = [];
-$multi = [];
 
-foreach ($sorted as $bill) {
+    /*
+    |--------------------------------------------------------------------------
+    | Tạo danh sách PAGE mới
+    |--------------------------------------------------------------------------
+    |
+    | QUAN TRỌNG:
+    | Một BILL có 2 page -> đưa cả 2 page vào cùng nhau.
+    |
+    */
 
-    if ($bill['multi']) {
-        $multi[] = $bill;
-    } else {
-        $single[] = $bill;
+    $pages = [];
+
+    foreach ($sorted as $bill) {
+
+        foreach ($bill['pages'] as $page) {
+
+            $pages[] =
+                (int) $page;
+        }
     }
-}
 
-        $groups = collect($single)
-    ->groupBy('product')
-    ->map(function ($items) {
+    /*
+    |--------------------------------------------------------------------------
+    | Không có page
+    |--------------------------------------------------------------------------
+    */
 
-        return [
-            'count' => $items->count(),
-            'pages' => $items->pluck('page')->implode(','),
+    if (empty($pages)) {
+
+        throw new \Exception(
+            'Không có trang nào để sắp xếp.'
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tên file output
+    |--------------------------------------------------------------------------
+    */
+
+    $outputFilename =
+        'tiktok_sorted_' .
+        date('Ymd_His') .
+        '_' .
+        uniqid() .
+        '.pdf';
+
+    $outputPdf =
+        $workDir .
+        DIRECTORY_SEPARATOR .
+        $outputFilename;
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tạo PDF
+    |--------------------------------------------------------------------------
+    */
+
+    $this->createSortedPdf(
+        $inputPdf,
+        $pages,
+        $outputPdf
+    );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Session
+    |--------------------------------------------------------------------------
+    */
+
+    session([
+
+        'tiktok_sorted_pdf' =>
+            $outputPdf,
+
+        'tiktok_sorted_filename' =>
+            $outputFilename,
+
+    ]);
+
+    /*
+    |--------------------------------------------------------------------------
+    | Nhóm BILL 1 sản phẩm
+    |--------------------------------------------------------------------------
+    */
+
+    $single =
+        $sorted->where(
+            'multi',
+            false
+        )->where(
+            'unknown',
+            false
+        );
+
+    $groups =
+        $single
+            ->groupBy('product')
+            ->map(function ($items) {
+
+                return [
+
+                    /*
+                    | Số BILL
+                    */
+
+                    'count' =>
+                        $items->count(),
+
+                    /*
+                    | Tất cả page của các bill
+                    */
+
+                    'pages' =>
+                        $items
+                            ->flatMap(
+                                function ($item) {
+                                    return $item['pages'];
+                                }
+                            )
+                            ->implode(','),
+
+                ];
+            });
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bill nhiều sản phẩm
+    |--------------------------------------------------------------------------
+    */
+
+    $multiPages =
+        $sorted
+            ->where(
+                'multi',
+                true
+            )
+            ->flatMap(
+                function ($item) {
+                    return $item['pages'];
+                }
+            )
+            ->implode(',');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Danh sách page
+    |--------------------------------------------------------------------------
+    */
+
+    $pageList =
+        implode(
+            ',',
+            $pages
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Trang kết quả
+    |--------------------------------------------------------------------------
+    */
+
+    return view(
+        'result',
+        compact(
+            'groups',
+            'pageList',
+            'multiPages'
+        )
+    );
+}   
+
+    private function mergePdf(
+        array $inputPaths,
+        string $outputPath
+    ) {
+
+        $pdfunite =
+            $this->getPdfunitePath();
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra pdfunite
+        |--------------------------------------------------------------------------
+        */
+
+        if (!file_exists($pdfunite)) {
+
+            throw new \Exception(
+                'Không tìm thấy pdfunite tại: '
+                . $pdfunite
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Command
+        |--------------------------------------------------------------------------
+        */
+
+        $command = [
+            $pdfunite
         ];
 
-    });
-$pageList = collect($sorted)
-    ->pluck('page')
-    ->implode(',');
-return view('result', compact('groups', 'pageList'));
+
+        foreach ($inputPaths as $path) {
+
+            if (!file_exists($path)) {
+
+                throw new \Exception(
+                    'Không tìm thấy file PDF: '
+                    . $path
+                );
+            }
+
+
+            $command[] =
+                $path;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Output
+        |--------------------------------------------------------------------------
+        */
+
+        $command[] =
+            $outputPath;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Chạy pdfunite
+        |--------------------------------------------------------------------------
+        */
+
+        $result =
+            Process::timeout(300)
+                ->run($command);
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !file_exists($outputPath) ||
+            filesize($outputPath) <= 0
+        ) {
+
+            throw new \Exception(
+
+                "Không thể ghép PDF TikTok.\n\n"
+
+                . "Input:\n"
+                . implode(
+                    "\n",
+                    $inputPaths
+                )
+
+                . "\n\nOutput:\n"
+                . $outputPath
+
+                . "\n\npdfunite error:\n"
+                . $result->errorOutput()
+
+                . "\n\npdfunite output:\n"
+                . $result->output()
+            );
+        }
     }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Đường dẫn pdfunite
+    |--------------------------------------------------------------------------
+    */
+
+    private function getPdfunitePath()
+    {
+        if (
+            PHP_OS_FAMILY === 'Windows'
+        ) {
+
+            return
+                'C:\poppler-26.02.0\Library\bin\pdfunite.exe';
+        }
+
+
+        return
+            '/usr/bin/pdfunite';
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | So sánh SKU
+    |--------------------------------------------------------------------------
+    */
+
+    private function compareSku(
+        string $skuA,
+        string $skuB
+    ) {
+
+        preg_match(
+            '/^\d+/',
+            $skuA,
+            $matchA
+        );
+
+
+        preg_match(
+            '/^\d+/',
+            $skuB,
+            $matchB
+        );
+
+
+        $numA =
+            isset($matchA[0])
+                ? (int) $matchA[0]
+                : null;
+
+
+        $numB =
+            isset($matchB[0])
+                ? (int) $matchB[0]
+                : null;
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Cả hai có số
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $numA !== null &&
+            $numB !== null
+        ) {
+
+            if (
+                $numA != $numB
+            ) {
+
+                return
+                    $numA
+                    <=>
+                    $numB;
+            }
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Chỉ A có số
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $numA !== null &&
+            $numB === null
+        ) {
+
+            return -1;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Chỉ B có số
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            $numA === null &&
+            $numB !== null
+        ) {
+
+            return 1;
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | So sánh chữ
+        |--------------------------------------------------------------------------
+        */
+
+        return
+            strnatcasecmp(
+                $skuA,
+                $skuB
+            );
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Đọc thông tin sản phẩm TikTok
+    |--------------------------------------------------------------------------
+    */
 
     private function extractProduct($text)
 {
     $result = [
+
         'product' => '',
+
         'sku' => '',
+
         'qty' => 1,
+
         'multi' => false,
+
     ];
 
-    
-    if (!preg_match('/Product Name.*?Qty(.*?)Qty Total:/is', $text, $match)) {
+    /*
+    |--------------------------------------------------------------------------
+    | Chuẩn hóa text
+    |--------------------------------------------------------------------------
+    */
+
+    $text =
+        str_replace(
+            ["\r\n", "\r"],
+            "\n",
+            $text
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tìm vùng Product Name -> Qty Total
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !preg_match(
+            '/Product\s+Name.*?Qty(.*?)Qty\s+Total\s*:/is',
+            $text,
+            $match
+        )
+    ) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | Một số bill có Qty Total ở page khác
+        |--------------------------------------------------------------------------
+        |
+        | Nếu không tìm được vùng hoàn chỉnh,
+        | thử lấy từ Product Name đến hết.
+        |
+        */
+
+        if (
+            !preg_match(
+                '/Product\s+Name.*?Qty(.*)/is',
+                $text,
+                $match
+            )
+        ) {
+
+            return $result;
+        }
+    }
+
+    $content =
+        trim(
+            $match[1]
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tách dòng
+    |--------------------------------------------------------------------------
+    */
+
+    $lines =
+        preg_split(
+            '/\n/',
+            $content
+        );
+
+    $lines =
+        array_values(
+            array_filter(
+                array_map(
+                    'trim',
+                    $lines
+                )
+            )
+        );
+
+    if (empty($lines)) {
         return $result;
     }
 
-    $content = trim($match[1]);
+    /*
+    |--------------------------------------------------------------------------
+    | Xác định các dòng sản phẩm
+    |--------------------------------------------------------------------------
+    |
+    | TikTok thường kết thúc mỗi product bằng:
+    |
+    | xxx 1
+    | xxx 2
+    | 1
+    | 2
+    |
+    */
 
-    $lines = preg_split('/\r\n|\r|\n/', $content);
-    $lines = array_values(array_filter(array_map('trim', $lines)));
+    $productRows = [];
 
-    $product = [];
+    $currentRow = [];
 
     foreach ($lines as $line) {
 
-        // SKU + Qty cùng dòng
-        if (preg_match('/^(.*?)\s+(\d+)$/u', $line, $m)) {
+        /*
+        |--------------------------------------------------------------------------
+        | Bỏ các dòng Order ID
+        |--------------------------------------------------------------------------
+        */
 
-            $result['sku'] = trim($m[1]);
-            $result['qty'] = (int)$m[2];
+        if (
+            preg_match(
+                '/^Order\s*ID\s*:/i',
+                $line
+            )
+        ) {
 
-            break;
+            continue;
         }
 
-        // Qty nằm riêng một dòng
-        if (preg_match('/^\d+$/', $line)) {
+        /*
+        |--------------------------------------------------------------------------
+        | Dòng Qty
+        |--------------------------------------------------------------------------
+        |
+        | Ví dụ:
+        |
+        | Hộp 1
+        | 200g 1
+        | 1
+        | 2
+        |
+        */
 
-            $result['qty'] = (int)$line;
+        $isQtyLine = false;
 
-            break;
+        $rowQty = null;
+
+        if (
+            preg_match(
+                '/^(\d+)$/',
+                $line,
+                $m
+            )
+        ) {
+
+            $isQtyLine = true;
+
+            $rowQty =
+                (int) $m[1];
+
+        } elseif (
+            preg_match(
+                '/\s(\d+)$/u',
+                $line,
+                $m
+            )
+        ) {
+
+            $isQtyLine = true;
+
+            $rowQty =
+                (int) $m[1];
         }
 
-        $product[] = $line;
+        /*
+        |--------------------------------------------------------------------------
+        | Thêm line vào row
+        |--------------------------------------------------------------------------
+        */
+
+        $currentRow[] =
+            $line;
+
+        /*
+        |--------------------------------------------------------------------------
+        | Nếu kết thúc product row
+        |--------------------------------------------------------------------------
+        */
+
+        if ($isQtyLine) {
+
+            $productRows[] = [
+
+                'lines' =>
+                    $currentRow,
+
+                'qty' =>
+                    $rowQty,
+
+            ];
+
+            $currentRow = [];
+        }
     }
 
-    // SKU bị đưa vào product thì bỏ ra
-    if (!empty($result['sku']) && end($product) == $result['sku']) {
-        array_pop($product);
+    /*
+    |--------------------------------------------------------------------------
+    | Nếu còn row cuối
+    |--------------------------------------------------------------------------
+    */
+
+    if (!empty($currentRow)) {
+
+        $productRows[] = [
+
+            'lines' =>
+                $currentRow,
+
+            'qty' =>
+                1,
+
+        ];
     }
 
-    $result['product'] = trim(implode(' ', $product));
+    /*
+    |--------------------------------------------------------------------------
+    | Không tìm được product row
+    |--------------------------------------------------------------------------
+    */
+
+    if (empty($productRows)) {
+
+        return $result;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Xác định BILL nhiều sản phẩm
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        count($productRows) > 1
+    ) {
+
+        $result['multi'] = true;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Lấy product đầu tiên làm sort key
+    |--------------------------------------------------------------------------
+    */
+
+    $firstRow =
+        $productRows[0];
+
+    $firstLines =
+        $firstRow['lines'];
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tìm SKU
+    |--------------------------------------------------------------------------
+    |
+    | Thường SKU nằm ở dòng cuối trước Qty.
+    |
+    */
+
+    $firstText =
+        implode(
+            ' ',
+            $firstLines
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Nếu dòng cuối có dạng:
+    |
+    | SKU 1
+    |
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        preg_match(
+            '/^(.*?)\s+(\d+)$/u',
+            trim($firstText),
+            $m
+        )
+    ) {
+
+        $result['sku'] =
+            trim($m[1]);
+
+        $result['qty'] =
+            (int) $m[2];
+    } else {
+
+        $result['qty'] =
+            (int) $firstRow['qty'];
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Product
+    |--------------------------------------------------------------------------
+    */
+
+    $product =
+        implode(
+            ' ',
+            $firstLines
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Nếu SKU đang dính vào product
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        !empty($result['sku'])
+    ) {
+
+        $product =
+            preg_replace(
+                '/\s+' .
+                preg_quote(
+                    $result['sku'],
+                    '/'
+                ) .
+                '\s*$/u',
+                '',
+                $product
+            );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Bỏ [ Giá Sỉ ]
+    |--------------------------------------------------------------------------
+    */
+
+    $product =
+        preg_replace(
+            '/^\[\s*Giá\s*Sỉ\s*\]\s*/iu',
+            '',
+            $product
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Unicode
+    |--------------------------------------------------------------------------
+    */
+
+    if (
+        class_exists(
+            '\Normalizer'
+        )
+    ) {
+
+        $product =
+            \Normalizer::normalize(
+                $product,
+                \Normalizer::FORM_KC
+            );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Khoảng trắng
+    |--------------------------------------------------------------------------
+    */
+
+    $product =
+        preg_replace(
+            '/\s+/u',
+            ' ',
+            $product
+        );
+
+    $product =
+        trim(
+            $product
+        );
+
+    /*
+    |--------------------------------------------------------------------------
+    | Gán product
+    |--------------------------------------------------------------------------
+    */
+
+    $result['product'] =
+        $product;
 
     return $result;
 }
+
+    private function createSortedPdf(
+        string $inputPdf,
+        array $pages,
+        string $outputPdf
+    ) {
+
+        /*
+        |--------------------------------------------------------------------------
+        | QPDF
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            PHP_OS_FAMILY === 'Windows'
+        ) {
+
+            $qpdf =
+                'C:\Program Files\qpdf 12.3.2\bin\qpdf.exe';
+
+        } else {
+
+            $qpdf =
+                '/usr/bin/qpdf';
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra QPDF
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !file_exists($qpdf)
+        ) {
+
+            throw new \Exception(
+                'Không tìm thấy qpdf tại: '
+                . $qpdf
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra input
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !file_exists($inputPdf)
+        ) {
+
+            throw new \Exception(
+                'Không tìm thấy PDF gốc: '
+                . $inputPdf
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra pages
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            empty($pages)
+        ) {
+
+            throw new \Exception(
+                'Không có trang nào để sắp xếp.'
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Repair PDF
+        |--------------------------------------------------------------------------
+        */
+
+        $repairedPdf =
+            dirname($outputPdf)
+            . DIRECTORY_SEPARATOR
+            . 'repaired_'
+            . uniqid()
+            . '.pdf';
+
+
+        $repairResult =
+            Process::timeout(300)
+                ->run([
+
+                    $qpdf,
+
+                    '--warning-exit-0',
+
+                    $inputPdf,
+
+                    $repairedPdf,
+
+                ]);
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra repaired
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !file_exists($repairedPdf) ||
+            filesize($repairedPdf) <= 0
+        ) {
+
+            throw new \Exception(
+
+                "Không thể repair PDF TikTok.\n\n"
+
+                . "Input:\n"
+                . $inputPdf
+
+                . "\n\nQPDF error:\n"
+                . $repairResult->errorOutput()
+
+                . "\n\nQPDF output:\n"
+                . $repairResult->output()
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Lấy tổng số trang
+        |--------------------------------------------------------------------------
+        */
+
+        $countResult =
+            Process::timeout(300)
+                ->run([
+
+                    $qpdf,
+
+                    '--warning-exit-0',
+
+                    '--show-npages',
+
+                    $repairedPdf,
+
+                ]);
+
+
+        $countOutput =
+            trim(
+                $countResult->output()
+            );
+
+
+        if (
+            !preg_match(
+                '/\d+/',
+                $countOutput,
+                $match
+            )
+        ) {
+
+            @unlink(
+                $repairedPdf
+            );
+
+
+            throw new \Exception(
+
+                "Không thể đọc số trang PDF sau khi repair.\n\n"
+
+                . "QPDF error:\n"
+                . $countResult->errorOutput()
+
+                . "\n\nQPDF output:\n"
+                . $countResult->output()
+            );
+        }
+
+
+        $totalPages =
+            (int) $match[0];
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Lọc page hợp lệ
+        |--------------------------------------------------------------------------
+        */
+
+        $validPages = [];
+
+
+        foreach ($pages as $page) {
+
+            $page =
+                (int) $page;
+
+
+            if (
+                $page >= 1 &&
+                $page <= $totalPages
+            ) {
+
+                $validPages[] =
+                    $page;
+            }
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Xóa duplicate
+        |--------------------------------------------------------------------------
+        */
+
+        $validPages =
+            array_values(
+                array_unique(
+                    $validPages
+                )
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            empty($validPages)
+        ) {
+
+            @unlink(
+                $repairedPdf
+            );
+
+
+            throw new \Exception(
+
+                "Không có trang hợp lệ.\n"
+
+                . "PDF có "
+                . $totalPages
+                . " trang."
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Page specification
+        |--------------------------------------------------------------------------
+        |
+        | Ví dụ:
+        |
+        | 63,165,213,222,14,15,...
+        |
+        |--------------------------------------------------------------------------
+        */
+
+        $pageSpec =
+            implode(
+                ',',
+                $validPages
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | QPDF tạo PDF mới
+        |--------------------------------------------------------------------------
+        */
+
+        $command = [
+
+            $qpdf,
+
+            '--warning-exit-0',
+
+            '--empty',
+
+            '--pages',
+
+            $repairedPdf,
+
+            $pageSpec,
+
+            '--',
+
+            $outputPdf,
+
+        ];
+
+
+        $result =
+            Process::timeout(300)
+                ->run($command);
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra output
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !file_exists($outputPdf) ||
+            filesize($outputPdf) <= 0
+        ) {
+
+            @unlink(
+                $repairedPdf
+            );
+
+
+            throw new \Exception(
+
+                "Không thể tạo PDF đã sắp xếp.\n\n"
+
+                . "Input:\n"
+                . $inputPdf
+
+                . "\n\nOutput:\n"
+                . $outputPdf
+
+                . "\n\nTổng số trang: "
+                . $totalPages
+
+                . "\n\nTrang yêu cầu:\n"
+                . implode(',', $pages)
+
+                . "\n\nTrang hợp lệ:\n"
+                . implode(',', $validPages)
+
+                . "\n\nQPDF error:\n"
+                . $result->errorOutput()
+
+                . "\n\nQPDF output:\n"
+                . $result->output()
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Xóa file repair
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            file_exists($repairedPdf)
+        ) {
+
+            @unlink(
+                $repairedPdf
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra cuối
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !file_exists($outputPdf)
+        ) {
+
+            throw new \Exception(
+                'QPDF không tạo được file output.'
+            );
+        }
+
+
+        if (
+            filesize($outputPdf) <= 0
+        ) {
+
+            throw new \Exception(
+                'File PDF kết quả có dung lượng bằng 0.'
+            );
+        }
+    }
+
+
+    /*
+    |--------------------------------------------------------------------------
+    | Download PDF TikTok
+    |--------------------------------------------------------------------------
+    */
+
+    public function download()
+    {
+        $file =
+            session(
+                'tiktok_sorted_pdf'
+            );
+
+
+        $filename =
+            session(
+                'tiktok_sorted_filename',
+                'bill_tiktok_da_sap_xep.pdf'
+            );
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Kiểm tra
+        |--------------------------------------------------------------------------
+        */
+
+        if (
+            !$file ||
+            !file_exists($file)
+        ) {
+
+            abort(
+                404,
+                'Không tìm thấy file PDF TikTok đã sắp xếp.'
+            );
+        }
+
+
+        /*
+        |--------------------------------------------------------------------------
+        | Download
+        |--------------------------------------------------------------------------
+        */
+
+        return response()
+            ->download(
+                $file,
+                $filename
+            )
+            ->deleteFileAfterSend(true);
+    }
 }

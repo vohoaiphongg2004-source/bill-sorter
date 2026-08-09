@@ -7,20 +7,20 @@
 
     <meta
         name="viewport"
-        content="width=device-width, initial-scale=1.0">
+        content="width=device-width, initial-scale=1.0"
+    >
 
-    <title>Kết quả Shopee - Bill Sorter</title>
-
+    <title>Kết quả - Bill Sorter</title>
 
     <style>
+
         * {
             box-sizing: border-box;
         }
 
-
         body {
+
             margin: 0;
-            min-height: 100vh;
 
             font-family:
                 Arial,
@@ -28,183 +28,98 @@
                 sans-serif;
 
             background:
-                linear-gradient(135deg,
+                linear-gradient(
+                    135deg,
                     #f5f7ff,
-                    #eef2ff);
+                    #eef2ff
+                );
 
             color: #1f2937;
-        }
 
+            min-height: 100vh;
+        }
 
         .container {
-            width: 92%;
-            max-width: 900px;
 
-            margin: 50px auto;
+            width: 92%;
+
+            max-width: 1100px;
+
+            margin: 40px auto;
         }
 
-
-        /* HEADER */
-
         .header {
+
             text-align: center;
 
             margin-bottom: 30px;
         }
 
-
-        .header-icon {
-            width: 60px;
-            height: 60px;
-
-            margin: 0 auto 15px;
-
-            display: flex;
-            align-items: center;
-            justify-content: center;
-
-            border-radius: 16px;
-
-            background: #fff1f2;
-
-            color: #ee4d2d;
-
-            font-size: 30px;
-        }
-
-
         .header h1 {
+
             margin: 0;
 
-            font-size: 30px;
-
-            color: #111827;
+            font-size: 32px;
         }
-
 
         .header p {
-            margin: 8px 0 0;
+
+            margin-top: 8px;
 
             color: #6b7280;
-
-            font-size: 15px;
         }
-
-
-        /* SUCCESS */
-
-        .success-card {
-            background: white;
-
-            border-radius: 16px;
-
-            padding: 18px 22px;
-
-            margin-bottom: 20px;
-
-            display: flex;
-
-            align-items: center;
-
-            gap: 14px;
-
-            box-shadow:
-                0 8px 25px rgba(0, 0, 0, .06);
-
-            border-left:
-                5px solid #22c55e;
-        }
-
-
-        .success-icon {
-            width: 40px;
-            height: 40px;
-
-            border-radius: 50%;
-
-            background: #dcfce7;
-
-            color: #16a34a;
-
-            display: flex;
-
-            align-items: center;
-            justify-content: center;
-
-            font-size: 20px;
-        }
-
-
-        .success-text strong {
-            display: block;
-
-            color: #15803d;
-
-            font-size: 15px;
-
-            margin-bottom: 3px;
-        }
-
-
-        .success-text span {
-            color: #6b7280;
-
-            font-size: 13px;
-        }
-
-
-        /* MAIN CARD */
 
         .card {
+
             background: white;
 
             border-radius: 16px;
 
-            padding: 28px;
+            padding: 25px;
+
+            margin-bottom: 25px;
 
             box-shadow:
-                0 8px 30px rgba(0, 0, 0, .07);
+                0 8px 30px rgba(0,0,0,.07);
         }
 
+        .title {
 
-        .card-title {
             display: flex;
 
             align-items: center;
 
             gap: 12px;
 
-            margin-bottom: 20px;
+            margin-bottom: 18px;
         }
 
+        .icon {
 
-        .card-icon {
-            width: 45px;
-            height: 45px;
-
-            border-radius: 11px;
-
-            background: #eef2ff;
+            width: 44px;
+            height: 44px;
 
             display: flex;
 
             align-items: center;
             justify-content: center;
 
-            font-size: 21px;
+            background: #eef2ff;
+
+            border-radius: 10px;
+
+            font-size: 22px;
         }
 
+        .title h2 {
 
-        .card-title h2 {
             margin: 0;
 
-            font-size: 21px;
-
-            color: #111827;
+            font-size: 20px;
         }
 
+        .title p {
 
-        .card-title p {
             margin: 4px 0 0;
 
             color: #6b7280;
@@ -212,94 +127,40 @@
             font-size: 13px;
         }
 
+        .page-row {
 
-        /* PAGE LIST */
+            display: flex;
 
-        .page-wrapper {
-            position: relative;
+            gap: 10px;
         }
 
+        #pageList {
 
-        textarea {
-            width: 100%;
+            flex: 1;
 
-            min-height: 130px;
+            min-width: 0;
 
-            resize: vertical;
-
-            padding: 15px;
+            padding: 13px 15px;
 
             border: 1px solid #d1d5db;
 
-            border-radius: 10px;
+            border-radius: 9px;
 
             background: #f9fafb;
 
-            color: #111827;
-
-            font-family:
-                Consolas,
-                monospace;
-
-            font-size: 15px;
-
-            line-height: 1.6;
+            font-size: 16px;
 
             outline: none;
         }
 
-
-        textarea:focus {
-            border-color: #6366f1;
-
-            background: white;
-
-            box-shadow:
-                0 0 0 3px rgba(99, 102, 241, .1);
-        }
-
-
-        /* ACTION */
-
-        .actions {
-            display: flex;
-
-            justify-content: space-between;
-
-            align-items: center;
-
-            margin-top: 15px;
-
-            gap: 15px;
-        }
-
-
-        .total {
-            color: #6b7280;
-
-            font-size: 14px;
-        }
-
-
-        .total strong {
-            color: #111827;
-
-            font-size: 20px;
-
-            margin-left: 5px;
-        }
-
-
-        .copy-button {
-            background: #4f46e5;
-
-            color: white;
-
-            padding: 11px 20px;
-
-            border-radius: 9px;
+        button,
+        .btn {
 
             border: none;
+
+            border-radius: 8px;
+
+            padding: 11px 16px;
 
             font-size: 14px;
 
@@ -307,45 +168,207 @@
 
             cursor: pointer;
 
-            transition: .2s ease;
+            text-decoration: none;
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            transition: .2s;
         }
 
+        button:hover,
+        .btn:hover {
 
-        .copy-button:hover {
-            background: #4338ca;
-
-            transform:
-                translateY(-1px);
+            transform: translateY(-1px);
         }
 
+        .copy {
 
-        .copy-button.copied {
+            background: #4f46e5;
+
+            color: white;
+        }
+
+        .download {
+
             background: #16a34a;
+
+            color: white;
         }
 
+        .download:hover {
 
-        /* INFO */
+            background: #15803d;
+        }
 
-        .info {
-            margin-top: 20px;
+        .copied {
 
-            padding: 14px 16px;
+            display: block;
 
-            border-radius: 9px;
+            margin-top: 10px;
 
-            background: #f8fafc;
+            color: #16a34a;
 
-            color: #64748b;
+            font-size: 13px;
+        }
+
+        .products-header {
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: space-between;
+
+            margin-bottom: 20px;
+        }
+
+        .products-header h2 {
+
+            margin: 0;
+        }
+
+        .badge {
+
+            background: #eef2ff;
+
+            color: #4f46e5;
+
+            padding: 6px 12px;
+
+            border-radius: 20px;
 
             font-size: 13px;
 
-            line-height: 1.5;
+            font-weight: bold;
         }
 
+        .table-wrapper {
 
-        /* FOOTER */
+            overflow-x: auto;
+        }
+
+        table {
+
+            width: 100%;
+
+            border-collapse: collapse;
+
+            min-width: 700px;
+        }
+
+        th {
+
+            background: #f8fafc;
+
+            color: #475569;
+
+            padding: 13px;
+
+            text-align: left;
+
+            font-size: 13px;
+
+            border-bottom: 2px solid #e5e7eb;
+        }
+
+        td {
+
+            padding: 14px 13px;
+
+            border-bottom: 1px solid #edf0f3;
+
+            vertical-align: middle;
+        }
+
+        tbody tr:hover {
+
+            background: #fafbff;
+        }
+
+        .product-name {
+
+            font-weight: 600;
+
+            line-height: 1.5;
+
+            max-width: 500px;
+        }
+
+        .count {
+
+            display: inline-flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            min-width: 35px;
+
+            height: 30px;
+
+            padding: 0 10px;
+
+            background: #f3f4f6;
+
+            border-radius: 7px;
+
+            font-weight: bold;
+        }
+
+        textarea {
+
+            width: 100%;
+
+            height: 45px;
+
+            resize: none;
+
+            border: 1px solid #e5e7eb;
+
+            border-radius: 7px;
+
+            background: #f9fafb;
+
+            padding: 11px;
+
+            font-family: Consolas, monospace;
+
+            font-size: 13px;
+
+            outline: none;
+        }
+
+        .copy-small {
+
+            background: #eef2ff;
+
+            color: #4f46e5;
+        }
+
+        .multi-box {
+
+            background: #fff7ed;
+
+            border: 1px solid #fed7aa;
+
+            color: #9a3412;
+        }
+
+        .empty {
+
+            text-align: center;
+
+            padding: 40px;
+
+            color: #9ca3af;
+        }
 
         .footer {
+
             text-align: center;
 
             margin-top: 25px;
@@ -355,45 +378,40 @@
             font-size: 13px;
         }
 
-
-        /* MOBILE */
-
-        @media (max-width: 600px) {
+        @media (max-width: 700px) {
 
             .container {
+
                 width: 94%;
 
-                margin: 25px auto;
+                margin: 20px auto;
             }
-
 
             .card {
-                padding: 20px;
+
+                padding: 18px;
             }
 
+            .page-row {
 
-            .header h1 {
-                font-size: 26px;
-            }
-
-
-            .actions {
                 flex-direction: column;
-
-                align-items: stretch;
             }
 
+            .page-row button,
+            .page-row .btn {
 
-            .copy-button {
                 width: 100%;
             }
 
+            .products-header {
 
-            .total {
-                text-align: center;
+                align-items: flex-start;
+
+                gap: 10px;
             }
 
         }
+
     </style>
 
 </head>
@@ -401,71 +419,101 @@
 
 <body>
 
+<div class="container">
 
-    <div class="container">
+
+    <div class="header">
+
+        <h1>📦 Bill Sorter</h1>
+
+        <p>
+            Bill Shopee đã được sắp xếp
+        </p>
+
+    </div>
 
 
-        <!-- HEADER -->
+    <!-- THỨ TỰ TRANG -->
 
-        <div class="header">
+    <div class="card">
 
-            <div class="header-icon">
-                🛍️
+        <div class="title">
+
+            <div class="icon">
+                📄
             </div>
 
-            <h1>
-                Kết quả Bill Shopee
-            </h1>
+            <div>
 
-            <p>
-                Bill Sorter - Kết quả sắp xếp trang
-            </p>
+                <h2>
+                    Thứ tự trang cần in
+                </h2>
 
-        </div>
-
-
-        <!-- SUCCESS -->
-
-        <div class="success-card">
-
-            <div class="success-icon">
-                ✓
-            </div>
-
-            <div class="success-text">
-
-                <strong>
-                    Đã sắp xếp thành công!
-                </strong>
-
-                <span>
-                    Thứ tự các trang đã được xử lý và sắp xếp.
-                </span>
+                <p>
+                    Thứ tự PDF sau khi sắp xếp
+                </p>
 
             </div>
 
         </div>
 
 
-        <!-- RESULT -->
+        <div class="page-row">
 
-        <div class="card">
+            <input
+                type="text"
+                id="pageList"
+                value="{{ $pageList }}"
+                readonly
+            >
 
 
-            <div class="card-title">
+            <button
+                class="copy"
+                onclick="copyPages()"
+            >
+                📋 Sao chép
+            </button>
 
-                <div class="card-icon">
-                    📄
+
+            <a
+                class="btn download"
+                href="{{ route('shopee.download') }}"
+            >
+                ⬇️ Tải PDF
+            </a>
+
+        </div>
+
+
+        <span
+            id="copied"
+            class="copied"
+        ></span>
+
+    </div>
+
+
+    <!-- BILL NHIỀU SẢN PHẨM -->
+
+    @if(!empty($multiPages))
+
+        <div class="card multi-box">
+
+            <div class="title">
+
+                <div class="icon">
+                    📦
                 </div>
 
                 <div>
 
                     <h2>
-                        Thứ tự trang cần in
+                        Bill nhiều sản phẩm
                     </h2>
 
                     <p>
-                        Sao chép danh sách bên dưới để sử dụng.
+                        Các bill nhiều sản phẩm được đưa lên đầu
                     </p>
 
                 </div>
@@ -473,167 +521,226 @@
             </div>
 
 
-            <!-- PAGE LIST -->
+            <input
+                type="text"
+                value="{{ $multiPages }}"
+                readonly
+                style="
+                    width:100%;
+                    padding:12px;
+                    border:1px solid #fed7aa;
+                    border-radius:8px;
+                    background:white;
+                "
+            >
 
-            <div class="page-wrapper">
+        </div>
 
-                <textarea
-                    id="pagesToPrint"
-                    readonly>{{ $pagesToPrint }}</textarea>
-
-            </div>
-
-
-            <!-- ACTION -->
-
-            <div class="actions">
-
-
-                <div class="total">
-
-                    Tổng số bill:
-
-                    <strong>
-                        {{ $pagesToPrint ? count(explode(',', $pagesToPrint)) : 0 }}
-                    </strong>
-
-                </div>
+    @endif
 
 
-                <button
-                    class="copy-button"
-                    id="copyButton"
-                    onclick="copyPages()">
+    <!-- DANH SÁCH -->
 
-                    📋 Sao chép thứ tự trang
+    <div class="card">
 
-                </button>
+        <div class="products-header">
 
+            <h2>
+                📋 Danh sách sản phẩm
+            </h2>
 
-            </div>
+            <span class="badge">
 
+                {{ count($groups) }} sản phẩm
 
-            <!-- INFO -->
-
-            <div class="info">
-
-                💡 <strong>Lưu ý:</strong>
-                Thứ tự trang phía trên là thứ tự đã được hệ thống
-                sắp xếp. Bạn có thể sao chép trực tiếp và sử dụng
-                khi in bill.
-
-            </div>
-
+            </span>
 
         </div>
 
 
-        <!-- FOOTER -->
+        <div class="table-wrapper">
 
-        <div class="footer">
-            Powered by Phong.exe • Running on caffeine. ☕
-            <br>
-            <small>// Please don't Ctrl+C 😎</small>
+            <table>
+
+                <thead>
+
+                    <tr>
+
+                        <th style="width:50px">
+                            #
+                        </th>
+
+                        <th>
+                            Sản phẩm
+                        </th>
+
+                        <th style="width:100px">
+                            Số bill
+                        </th>
+
+                        <th style="width:35%">
+                            Trang
+                        </th>
+
+                        <th style="width:100px">
+                            Copy
+                        </th>
+
+                    </tr>
+
+                </thead>
+
+
+                <tbody>
+
+                @forelse($groups as $product => $item)
+
+                    <tr>
+
+                        <td>
+
+                            <strong>
+                                {{ $loop->iteration }}
+                            </strong>
+
+                        </td>
+
+
+                        <td>
+
+                            <div class="product-name">
+
+                                {{ $product }}
+
+                            </div>
+
+                        </td>
+
+
+                        <td>
+
+                            <span class="count">
+
+                                {{ $item['count'] }}
+
+                            </span>
+
+                        </td>
+
+
+                        <td>
+
+                            <textarea
+                                id="page{{ $loop->index }}"
+                                readonly
+                            >{{ $item['pages'] }}</textarea>
+
+                        </td>
+
+
+                        <td>
+
+                            <button
+                                class="copy-small"
+                                onclick="
+                                    copyPage(
+                                        'page{{ $loop->index }}',
+                                        this
+                                    )
+                                "
+                            >
+                                📋 Copy
+                            </button>
+
+                        </td>
+
+                    </tr>
+
+                @empty
+
+                    <tr>
+
+                        <td
+                            colspan="5"
+                            class="empty"
+                        >
+
+                            Không có sản phẩm nào.
+
+                        </td>
+
+                    </tr>
+
+                @endforelse
+
+                </tbody>
+
+            </table>
+
         </div>
-
 
     </div>
 
 
-    <script>
-        function copyPages() {
+    <div class="footer">
 
-            const textarea =
-                document.getElementById(
-                    "pagesToPrint"
-                );
+        Powered by Phong.exe • Running on caffeine. ☕
+        <br>
+        <small>// Please don't Ctrl+C 😎</small>
 
+    </div>
 
-            const button =
-                document.getElementById(
-                    "copyButton"
-                );
+</div>
 
 
-            const text =
-                textarea.value.trim();
+<script>
+
+function copyPages()
+{
+    const input =
+        document.getElementById('pageList');
+
+    navigator.clipboard.writeText(
+        input.value
+    );
+
+    document.getElementById('copied')
+        .innerText =
+        '✓ Đã sao chép!';
+
+    setTimeout(function () {
+
+        document.getElementById('copied')
+            .innerText = '';
+
+    }, 2000);
+}
 
 
-            if (!text) {
+function copyPage(id, button)
+{
+    const textarea =
+        document.getElementById(id);
 
-                alert(
-                    "Không có trang nào để sao chép!"
-                );
+    navigator.clipboard.writeText(
+        textarea.value
+    );
 
-                return;
-            }
+    const oldText =
+        button.innerHTML;
 
+    button.innerHTML =
+        '✓ Đã copy';
 
-            navigator.clipboard
-                .writeText(text)
+    setTimeout(function () {
 
-                .then(function() {
+        button.innerHTML =
+            oldText;
 
-                    button.innerHTML =
-                        "✓ Đã sao chép!";
+    }, 1500);
+}
 
-                    button.classList.add(
-                        "copied"
-                    );
-
-
-                    setTimeout(
-                        function() {
-
-                            button.innerHTML =
-                                "📋 Sao chép thứ tự trang";
-
-                            button.classList.remove(
-                                "copied"
-                            );
-
-                        },
-                        2000
-                    );
-
-                })
-
-                .catch(function() {
-
-                    textarea.select();
-
-                    document.execCommand(
-                        "copy"
-                    );
-
-
-                    button.innerHTML =
-                        "✓ Đã sao chép!";
-
-                    button.classList.add(
-                        "copied"
-                    );
-
-
-                    setTimeout(
-                        function() {
-
-                            button.innerHTML =
-                                "📋 Sao chép thứ tự trang";
-
-                            button.classList.remove(
-                                "copied"
-                            );
-
-                        },
-                        2000
-                    );
-
-                });
-
-        }
-    </script>
-
+</script>
 
 </body>
 
