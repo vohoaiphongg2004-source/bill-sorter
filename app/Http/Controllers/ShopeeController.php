@@ -326,15 +326,7 @@ class ShopeeController extends Controller
         |--------------------------------------------------------------------------
         */
 
-        session([
-
-            'shopee_sorted_pdf' =>
-                $sortedPdf,
-
-            'shopee_sorted_filename' =>
-                $filename,
-
-        ]);
+        
 
 
         /*
@@ -392,13 +384,15 @@ class ShopeeController extends Controller
         */
 
         return view(
-            'shopeeresult',
-            compact(
-                'groups',
-                'pageList',
-                'multiPages'
-            )
-        );
+    'shopeeresult',
+    compact(
+        'groups',
+        'pageList',
+        'multiPages',
+        'sortedPdf',
+        'filename'
+    )
+);
     }
 
 
@@ -1216,36 +1210,20 @@ class ShopeeController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    public function download()
+    public function download($filename)
 {
-    $file = session('shopee_sorted_pdf');
+    $filename = basename($filename);
 
-    $filename = session(
-        'shopee_sorted_filename',
-        'bill_shopee_da_sap_xep.pdf'
+    $file = storage_path(
+        'app/pdf-sorter/' . $filename
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Kiểm tra file
-    |--------------------------------------------------------------------------
-    */
-
-    if (!$file || !file_exists($file)) {
-
-        abort(
-            404,
-            'Không tìm thấy file PDF Shopee đã sắp xếp.'
-        );
+    if (!file_exists($file)) {
+        abort(404, 'Không tìm thấy file PDF.');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Download PDF
-    |--------------------------------------------------------------------------
-    */
-
-    return response()->download($file,$filename)
-    ->deleteFileAfterSend(true);
+    return response()
+        ->download($file, $filename)
+        ->deleteFileAfterSend(true);
 }
 }

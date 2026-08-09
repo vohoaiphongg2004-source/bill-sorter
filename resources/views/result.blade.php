@@ -184,12 +184,7 @@
 
         </div>
 
-        <a
-            href="{{ route('tiktok.download') }}"
-            class="download"
-        >
-            ⬇️ Tải PDF đã sắp xếp
-        </a>
+        
 
         <a
             href="{{ route('home') }}"
@@ -297,8 +292,8 @@
 
 </body>
 <script>
-window.addEventListener('load', function () {
-    window.location.href = "{{ route('tiktok.download') }}";
+document.addEventListener('DOMContentLoaded', function () {
+    window.location.href = "{{ route('tiktok.download', ['filename' => $filename]) }}";
 });
 </script>
 </html>

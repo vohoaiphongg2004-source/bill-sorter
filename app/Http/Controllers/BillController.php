@@ -27,157 +27,155 @@ class BillController extends Controller
     | Ghép -> đọc -> sắp xếp -> tạo PDF
     |--------------------------------------------------------------------------
     */
-private function extractOrderId($text)
-{
-    if (empty($text)) {
-        return null;
-    }
+    private function extractOrderId($text)
+    {
+        if (empty($text)) {
+            return null;
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Tìm Order ID
     |--------------------------------------------------------------------------
     */
 
-    if (
-        preg_match(
-            '/Order\s*ID\s*:\s*(\d{10,})/i',
-            $text,
-            $match
-        )
-    ) {
+        if (
+            preg_match(
+                '/Order\s*ID\s*:\s*(\d{10,})/i',
+                $text,
+                $match
+            )
+        ) {
 
-        return trim($match[1]);
+            return trim($match[1]);
+        }
+
+        return null;
     }
-
-    return null;
-}
     public function upload(Request $request)
-{
-    /*
+    {
+        /*
     |--------------------------------------------------------------------------
     | Cho phép upload 1 hoặc nhiều PDF
     |--------------------------------------------------------------------------
     */
 
-    $request->validate([
-        'pdf' => 'required|array|min:1',
-        'pdf.*' => 'required|file|mimes:pdf|max:51200',
-    ]);
+        $request->validate([
+            'pdf' => 'required|array|min:1',
+            'pdf.*' => 'required|file|mimes:pdf|max:51200',
+        ]);
 
-    $files = $request->file('pdf');
+        $files = $request->file('pdf');
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Thư mục làm việc
     |--------------------------------------------------------------------------
     */
 
-    $workDir = storage_path('app/pdf-sorter');
+        $workDir = storage_path('app/pdf-sorter');
 
-    if (!is_dir($workDir)) {
-        mkdir($workDir, 0777, true);
-    }
+        if (!is_dir($workDir)) {
+            mkdir($workDir, 0777, true);
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Lưu PDF upload
     |--------------------------------------------------------------------------
     */
 
-    $inputPaths = [];
+        $inputPaths = [];
 
-    foreach ($files as $file) {
+        foreach ($files as $file) {
 
-        $filename =
-            'tiktok_' .
-            uniqid() .
-            '.pdf';
+            $filename =
+                'tiktok_' .
+                uniqid() .
+                '.pdf';
 
-        $path = $file->storeAs(
-            'pdf-sorter',
-            $filename,
-            'local'
-        );
+            $path = $file->storeAs(
+                'pdf-sorter',
+                $filename,
+                'local'
+            );
 
-        $inputPaths[] =
-            Storage::disk('local')->path($path);
-    }
+            $inputPaths[] =
+                Storage::disk('local')->path($path);
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Nếu chỉ có 1 PDF
     |--------------------------------------------------------------------------
     */
 
-    if (count($inputPaths) === 1) {
+        if (count($inputPaths) === 1) {
 
-        $inputPdf = $inputPaths[0];
+            $inputPdf = $inputPaths[0];
+        } else {
 
-    } else {
-
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Nếu nhiều PDF -> ghép
         |--------------------------------------------------------------------------
         */
 
-        $inputPdf =
-            $workDir .
-            DIRECTORY_SEPARATOR .
-            'tiktok_merged_' .
-            uniqid() .
-            '.pdf';
+            $inputPdf =
+                $workDir .
+                DIRECTORY_SEPARATOR .
+                'tiktok_merged_' .
+                uniqid() .
+                '.pdf';
 
-        $this->mergePdf(
-            $inputPaths,
-            $inputPdf
-        );
-    }
+            $this->mergePdf(
+                $inputPaths,
+                $inputPdf
+            );
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Kiểm tra PDF
     |--------------------------------------------------------------------------
     */
 
-    if (!file_exists($inputPdf)) {
+        if (!file_exists($inputPdf)) {
 
-        throw new \Exception(
-            'Không tìm thấy PDF TikTok sau khi upload/ghép.'
-        );
-    }
+            throw new \Exception(
+                'Không tìm thấy PDF TikTok sau khi upload/ghép.'
+            );
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Đọc PDF
     |--------------------------------------------------------------------------
     */
 
-    $parser = new Parser();
+        $parser = new Parser();
 
-    try {
+        try {
 
-        $pdf = $parser->parseFile($inputPdf);
+            $pdf = $parser->parseFile($inputPdf);
+        } catch (\Throwable $e) {
 
-    } catch (\Throwable $e) {
+            throw new \Exception(
+                'Không thể đọc file PDF TikTok: ' .
+                    $e->getMessage()
+            );
+        }
 
-        throw new \Exception(
-            'Không thể đọc file PDF TikTok: ' .
-            $e->getMessage()
-        );
-    }
+        $pdfPages = $pdf->getPages();
 
-    $pdfPages = $pdf->getPages();
+        if (empty($pdfPages)) {
 
-    if (empty($pdfPages)) {
+            throw new \Exception(
+                'PDF TikTok không có trang nào.'
+            );
+        }
 
-        throw new \Exception(
-            'PDF TikTok không có trang nào.'
-        );
-    }
-
-    /*
+        /*
     |--------------------------------------------------------------------------
     | BƯỚC QUAN TRỌNG:
     |
@@ -185,26 +183,26 @@ private function extractOrderId($text)
     |--------------------------------------------------------------------------
     */
 
-    $billGroups = [];
+        $billGroups = [];
 
-    $currentGroup = null;
+        $currentGroup = null;
 
-    foreach ($pdfPages as $index => $page) {
+        foreach ($pdfPages as $index => $page) {
 
-        $pageNumber = $index + 1;
+            $pageNumber = $index + 1;
 
-        $text = $page->getText();
+            $text = $page->getText();
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Lấy Order ID của page
         |--------------------------------------------------------------------------
         */
 
-        $orderId =
-            $this->extractOrderId($text);
+            $orderId =
+                $this->extractOrderId($text);
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Nếu chưa có Order ID
         |
@@ -212,21 +210,21 @@ private function extractOrderId($text)
         |--------------------------------------------------------------------------
         */
 
-        if ($orderId === null) {
+            if ($orderId === null) {
 
-            if ($currentGroup !== null) {
+                if ($currentGroup !== null) {
 
-                $currentGroup['pages'][] =
-                    $pageNumber;
+                    $currentGroup['pages'][] =
+                        $pageNumber;
 
-                $currentGroup['texts'][] =
-                    $text;
+                    $currentGroup['texts'][] =
+                        $text;
+                }
+
+                continue;
             }
 
-            continue;
-        }
-
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Nếu đang cùng Order ID
         |
@@ -234,25 +232,57 @@ private function extractOrderId($text)
         |--------------------------------------------------------------------------
         */
 
-        if (
-            $currentGroup !== null &&
-            $currentGroup['order_id'] === $orderId
-        ) {
+            if (
+                $currentGroup !== null &&
+                $currentGroup['order_id'] === $orderId
+            ) {
 
-            $currentGroup['pages'][] =
-                $pageNumber;
+                $currentGroup['pages'][] =
+                    $pageNumber;
 
-            $currentGroup['texts'][] =
-                $text;
+                $currentGroup['texts'][] =
+                    $text;
 
-            continue;
-        }
+                continue;
+            }
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | BILL mới
         |--------------------------------------------------------------------------
         */
+
+            if ($currentGroup !== null) {
+
+                $billGroups[] =
+                    $currentGroup;
+            }
+
+            $currentGroup = [
+
+                'order_id' =>
+                $orderId,
+
+                'pages' => [
+
+                    $pageNumber
+
+                ],
+
+                'texts' => [
+
+                    $text
+
+                ],
+
+            ];
+        }
+
+        /*
+    |--------------------------------------------------------------------------
+    | Thêm bill cuối
+    |--------------------------------------------------------------------------
+    */
 
         if ($currentGroup !== null) {
 
@@ -260,94 +290,62 @@ private function extractOrderId($text)
                 $currentGroup;
         }
 
-        $currentGroup = [
-
-            'order_id' =>
-                $orderId,
-
-            'pages' => [
-
-                $pageNumber
-
-            ],
-
-            'texts' => [
-
-                $text
-
-            ],
-
-        ];
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | Thêm bill cuối
-    |--------------------------------------------------------------------------
-    */
-
-    if ($currentGroup !== null) {
-
-        $billGroups[] =
-            $currentGroup;
-    }
-
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Không tìm thấy bill
     |--------------------------------------------------------------------------
     */
 
-    if (empty($billGroups)) {
+        if (empty($billGroups)) {
 
-        throw new \Exception(
-            'Không tìm thấy Order ID trong PDF TikTok.'
-        );
-    }
+            throw new \Exception(
+                'Không tìm thấy Order ID trong PDF TikTok.'
+            );
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Phân tích từng BILL
     |--------------------------------------------------------------------------
     */
 
-    $bills = [];
+        $bills = [];
 
-    foreach ($billGroups as $group) {
+        foreach ($billGroups as $group) {
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Ghép text tất cả page của bill
         |--------------------------------------------------------------------------
         */
 
-        $fullText =
-            implode(
-                "\n",
-                $group['texts']
-            );
+            $fullText =
+                implode(
+                    "\n",
+                    $group['texts']
+                );
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Đọc product
         |--------------------------------------------------------------------------
         */
 
-        $info =
-            $this->extractProduct(
-                $fullText
-            );
+            $info =
+                $this->extractProduct(
+                    $fullText
+                );
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Bill không đọc được
         |--------------------------------------------------------------------------
         */
 
-        $unknown =
-            trim($info['product']) === '';
+            $unknown =
+                trim($info['product']) === '';
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Lưu BILL
         |--------------------------------------------------------------------------
@@ -357,36 +355,36 @@ private function extractOrderId($text)
         |
         */
 
-        $bills[] = [
+            $bills[] = [
 
-            'order_id' =>
+                'order_id' =>
                 $group['order_id'],
 
-            'pages' =>
+                'pages' =>
                 $group['pages'],
 
-            'page' =>
+                'page' =>
                 $group['pages'][0],
 
-            'product' =>
+                'product' =>
                 $info['product'],
 
-            'sku' =>
+                'sku' =>
                 $info['sku'],
 
-            'qty' =>
+                'qty' =>
                 $info['qty'],
 
-            'multi' =>
+                'multi' =>
                 $info['multi'],
 
-            'unknown' =>
+                'unknown' =>
                 $unknown,
 
-        ];
-    }
+            ];
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | SORT BILL
     |--------------------------------------------------------------------------
@@ -400,22 +398,22 @@ private function extractOrderId($text)
     |
     */
 
-    $sorted = collect($bills)
-    ->sort(function ($a, $b) {
+        $sorted = collect($bills)
+            ->sort(function ($a, $b) {
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | 1. Bill không đọc được -> cuối cùng
         |--------------------------------------------------------------------------
         */
 
-        if ($a['unknown'] !== $b['unknown']) {
+                if ($a['unknown'] !== $b['unknown']) {
 
-            return $a['unknown'] ? 1 : -1;
-        }
+                    return $a['unknown'] ? 1 : -1;
+                }
 
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | 2. Bill nhiều sản phẩm -> ĐẨY LÊN ĐẦU
         |--------------------------------------------------------------------------
@@ -426,13 +424,13 @@ private function extractOrderId($text)
         |
         */
 
-        if ($a['multi'] !== $b['multi']) {
+                if ($a['multi'] !== $b['multi']) {
 
-            return $a['multi'] ? -1 : 1;
-        }
+                    return $a['multi'] ? -1 : 1;
+                }
 
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | 3. Nếu cả hai đều là bill nhiều sản phẩm
         | hoặc đều là bill một sản phẩm
@@ -441,122 +439,122 @@ private function extractOrderId($text)
         |--------------------------------------------------------------------------
         */
 
-        if ($a['multi'] && $b['multi']) {
+                if ($a['multi'] && $b['multi']) {
 
-            /*
+                    /*
             |----------------------------------------------------------------------
             | Bill multi:
             | ưu tiên Product
             |----------------------------------------------------------------------
             */
 
-            $compareProduct = strnatcasecmp(
-                $a['product'],
-                $b['product']
-            );
+                    $compareProduct = strnatcasecmp(
+                        $a['product'],
+                        $b['product']
+                    );
 
-            if ($compareProduct !== 0) {
+                    if ($compareProduct !== 0) {
 
-                return $compareProduct;
-            }
+                        return $compareProduct;
+                    }
 
 
-            /*
+                    /*
             |----------------------------------------------------------------------
             | SKU
             |----------------------------------------------------------------------
             */
 
-            $compareSku = $this->compareSku(
-                $a['sku'],
-                $b['sku']
-            );
+                    $compareSku = $this->compareSku(
+                        $a['sku'],
+                        $b['sku']
+                    );
 
-            if ($compareSku !== 0) {
+                    if ($compareSku !== 0) {
 
-                return $compareSku;
-            }
+                        return $compareSku;
+                    }
 
 
-            /*
+                    /*
             |----------------------------------------------------------------------
             | Qty
             |----------------------------------------------------------------------
             */
 
-            if ($a['qty'] !== $b['qty']) {
+                    if ($a['qty'] !== $b['qty']) {
 
-                return $a['qty'] <=> $b['qty'];
-            }
+                        return $a['qty'] <=> $b['qty'];
+                    }
 
 
-            /*
+                    /*
             |----------------------------------------------------------------------
             | Nếu giống nhau -> giữ thứ tự trang gốc
             |----------------------------------------------------------------------
             */
 
-            return $a['page'] <=> $b['page'];
-        }
+                    return $a['page'] <=> $b['page'];
+                }
 
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | 4. Bill một sản phẩm
         |--------------------------------------------------------------------------
         */
 
-        $compareProduct = strnatcasecmp(
-            $a['product'],
-            $b['product']
-        );
+                $compareProduct = strnatcasecmp(
+                    $a['product'],
+                    $b['product']
+                );
 
-        if ($compareProduct !== 0) {
+                if ($compareProduct !== 0) {
 
-            return $compareProduct;
-        }
+                    return $compareProduct;
+                }
 
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | SKU
         |--------------------------------------------------------------------------
         */
 
-        $compareSku = $this->compareSku(
-            $a['sku'],
-            $b['sku']
-        );
+                $compareSku = $this->compareSku(
+                    $a['sku'],
+                    $b['sku']
+                );
 
-        if ($compareSku !== 0) {
+                if ($compareSku !== 0) {
 
-            return $compareSku;
-        }
+                    return $compareSku;
+                }
 
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | Qty
         |--------------------------------------------------------------------------
         */
 
-        if ($a['qty'] !== $b['qty']) {
+                if ($a['qty'] !== $b['qty']) {
 
-            return $a['qty'] <=> $b['qty'];
-        }
+                    return $a['qty'] <=> $b['qty'];
+                }
 
 
-        /*
+                /*
         |--------------------------------------------------------------------------
         | Giống hoàn toàn -> giữ thứ tự trang gốc
         |--------------------------------------------------------------------------
         */
 
-        return $a['page'] <=> $b['page'];
-    })
-    ->values();
+                return $a['page'] <=> $b['page'];
+            })
+            ->values();
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Tạo danh sách PAGE mới
     |--------------------------------------------------------------------------
@@ -566,93 +564,85 @@ private function extractOrderId($text)
     |
     */
 
-    $pages = [];
+        $pages = [];
 
-    foreach ($sorted as $bill) {
+        foreach ($sorted as $bill) {
 
-        foreach ($bill['pages'] as $page) {
+            foreach ($bill['pages'] as $page) {
 
-            $pages[] =
-                (int) $page;
+                $pages[] =
+                    (int) $page;
+            }
         }
-    }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Không có page
     |--------------------------------------------------------------------------
     */
 
-    if (empty($pages)) {
+        if (empty($pages)) {
 
-        throw new \Exception(
-            'Không có trang nào để sắp xếp.'
-        );
-    }
+            throw new \Exception(
+                'Không có trang nào để sắp xếp.'
+            );
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Tên file output
     |--------------------------------------------------------------------------
     */
 
-    $outputFilename =
-        'tiktok_sorted_' .
-        date('Ymd_His') .
-        '_' .
-        uniqid() .
-        '.pdf';
+        $filename =
+            'tiktok_sorted_' .
+            date('Ymd_His') .
+            '_' .
+            uniqid() .
+            '.pdf';
 
-    $outputPdf =
-        $workDir .
-        DIRECTORY_SEPARATOR .
-        $outputFilename;
+        $outputPdf =
+            $workDir .
+            DIRECTORY_SEPARATOR .
+            $filename;
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Tạo PDF
     |--------------------------------------------------------------------------
     */
 
-    $this->createSortedPdf(
-        $inputPdf,
-        $pages,
-        $outputPdf
-    );
+        $this->createSortedPdf(
+            $inputPdf,
+            $pages,
+            $outputPdf
+        );
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Session
     |--------------------------------------------------------------------------
     */
 
-    session([
 
-        'tiktok_sorted_pdf' =>
-            $outputPdf,
 
-        'tiktok_sorted_filename' =>
-            $outputFilename,
-
-    ]);
-
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Nhóm BILL 1 sản phẩm
     |--------------------------------------------------------------------------
     */
 
-    $single =
-        $sorted->where(
-            'multi',
-            false
-        )->where(
-            'unknown',
-            false
-        );
+        $single =
+            $sorted->where(
+                'multi',
+                false
+            )->where(
+                'unknown',
+                false
+            );
 
-    $groups =
-        $single
+        $groups =
+            $single
             ->groupBy('product')
             ->map(function ($items) {
 
@@ -663,32 +653,32 @@ private function extractOrderId($text)
                     */
 
                     'count' =>
-                        $items->count(),
+                    $items->count(),
 
                     /*
                     | Tất cả page của các bill
                     */
 
                     'pages' =>
-                        $items
-                            ->flatMap(
-                                function ($item) {
-                                    return $item['pages'];
-                                }
-                            )
-                            ->implode(','),
+                    $items
+                        ->flatMap(
+                            function ($item) {
+                                return $item['pages'];
+                            }
+                        )
+                        ->implode(','),
 
                 ];
             });
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Bill nhiều sản phẩm
     |--------------------------------------------------------------------------
     */
 
-    $multiPages =
-        $sorted
+        $multiPages =
+            $sorted
             ->where(
                 'multi',
                 true
@@ -700,33 +690,34 @@ private function extractOrderId($text)
             )
             ->implode(',');
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Danh sách page
     |--------------------------------------------------------------------------
     */
 
-    $pageList =
-        implode(
-            ',',
-            $pages
-        );
+        $pageList =
+            implode(
+                ',',
+                $pages
+            );
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Trang kết quả
     |--------------------------------------------------------------------------
     */
 
-    return view(
-        'result',
-        compact(
-            'groups',
-            'pageList',
-            'multiPages'
-        )
-    );
-}   
+        return view(
+            'result',
+            compact(
+                'groups',
+                'pageList',
+                'multiPages',
+                'filename'
+            )
+        );
+    }
 
     private function mergePdf(
         array $inputPaths,
@@ -747,7 +738,7 @@ private function extractOrderId($text)
 
             throw new \Exception(
                 'Không tìm thấy pdfunite tại: '
-                . $pdfunite
+                    . $pdfunite
             );
         }
 
@@ -769,7 +760,7 @@ private function extractOrderId($text)
 
                 throw new \Exception(
                     'Không tìm thấy file PDF: '
-                    . $path
+                        . $path
                 );
             }
 
@@ -797,7 +788,7 @@ private function extractOrderId($text)
 
         $result =
             Process::timeout(300)
-                ->run($command);
+            ->run($command);
 
 
         /*
@@ -815,20 +806,20 @@ private function extractOrderId($text)
 
                 "Không thể ghép PDF TikTok.\n\n"
 
-                . "Input:\n"
-                . implode(
-                    "\n",
-                    $inputPaths
-                )
+                    . "Input:\n"
+                    . implode(
+                        "\n",
+                        $inputPaths
+                    )
 
-                . "\n\nOutput:\n"
-                . $outputPath
+                    . "\n\nOutput:\n"
+                    . $outputPath
 
-                . "\n\npdfunite error:\n"
-                . $result->errorOutput()
+                    . "\n\npdfunite error:\n"
+                    . $result->errorOutput()
 
-                . "\n\npdfunite output:\n"
-                . $result->output()
+                    . "\n\npdfunite output:\n"
+                    . $result->output()
             );
         }
     }
@@ -883,14 +874,14 @@ private function extractOrderId($text)
 
         $numA =
             isset($matchA[0])
-                ? (int) $matchA[0]
-                : null;
+            ? (int) $matchA[0]
+            : null;
 
 
         $numB =
             isset($matchB[0])
-                ? (int) $matchB[0]
-                : null;
+            ? (int) $matchB[0]
+            : null;
 
 
         /*
@@ -967,47 +958,47 @@ private function extractOrderId($text)
     */
 
     private function extractProduct($text)
-{
-    $result = [
+    {
+        $result = [
 
-        'product' => '',
+            'product' => '',
 
-        'sku' => '',
+            'sku' => '',
 
-        'qty' => 1,
+            'qty' => 1,
 
-        'multi' => false,
+            'multi' => false,
 
-    ];
+        ];
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Chuẩn hóa text
     |--------------------------------------------------------------------------
     */
 
-    $text =
-        str_replace(
-            ["\r\n", "\r"],
-            "\n",
-            $text
-        );
+        $text =
+            str_replace(
+                ["\r\n", "\r"],
+                "\n",
+                $text
+            );
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Tìm vùng Product Name -> Qty Total
     |--------------------------------------------------------------------------
     */
 
-    if (
-        !preg_match(
-            '/Product\s+Name.*?Qty(.*?)Qty\s+Total\s*:/is',
-            $text,
-            $match
-        )
-    ) {
+        if (
+            !preg_match(
+                '/Product\s+Name.*?Qty(.*?)Qty\s+Total\s*:/is',
+                $text,
+                $match
+            )
+        ) {
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Một số bill có Qty Total ở page khác
         |--------------------------------------------------------------------------
@@ -1017,50 +1008,50 @@ private function extractOrderId($text)
         |
         */
 
-        if (
-            !preg_match(
-                '/Product\s+Name.*?Qty(.*)/is',
-                $text,
-                $match
-            )
-        ) {
+            if (
+                !preg_match(
+                    '/Product\s+Name.*?Qty(.*)/is',
+                    $text,
+                    $match
+                )
+            ) {
 
-            return $result;
+                return $result;
+            }
         }
-    }
 
-    $content =
-        trim(
-            $match[1]
-        );
+        $content =
+            trim(
+                $match[1]
+            );
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Tách dòng
     |--------------------------------------------------------------------------
     */
 
-    $lines =
-        preg_split(
-            '/\n/',
-            $content
-        );
+        $lines =
+            preg_split(
+                '/\n/',
+                $content
+            );
 
-    $lines =
-        array_values(
-            array_filter(
-                array_map(
-                    'trim',
-                    $lines
+        $lines =
+            array_values(
+                array_filter(
+                    array_map(
+                        'trim',
+                        $lines
+                    )
                 )
-            )
-        );
+            );
 
-    if (empty($lines)) {
-        return $result;
-    }
+        if (empty($lines)) {
+            return $result;
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Xác định các dòng sản phẩm
     |--------------------------------------------------------------------------
@@ -1074,29 +1065,29 @@ private function extractOrderId($text)
     |
     */
 
-    $productRows = [];
+        $productRows = [];
 
-    $currentRow = [];
+        $currentRow = [];
 
-    foreach ($lines as $line) {
+        foreach ($lines as $line) {
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Bỏ các dòng Order ID
         |--------------------------------------------------------------------------
         */
 
-        if (
-            preg_match(
-                '/^Order\s*ID\s*:/i',
-                $line
-            )
-        ) {
+            if (
+                preg_match(
+                    '/^Order\s*ID\s*:/i',
+                    $line
+                )
+            ) {
 
-            continue;
-        }
+                continue;
+            }
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Dòng Qty
         |--------------------------------------------------------------------------
@@ -1110,124 +1101,123 @@ private function extractOrderId($text)
         |
         */
 
-        $isQtyLine = false;
+            $isQtyLine = false;
 
-        $rowQty = null;
+            $rowQty = null;
 
-        if (
-            preg_match(
-                '/^(\d+)$/',
-                $line,
-                $m
-            )
-        ) {
+            if (
+                preg_match(
+                    '/^(\d+)$/',
+                    $line,
+                    $m
+                )
+            ) {
 
-            $isQtyLine = true;
+                $isQtyLine = true;
 
-            $rowQty =
-                (int) $m[1];
+                $rowQty =
+                    (int) $m[1];
+            } elseif (
+                preg_match(
+                    '/\s(\d+)$/u',
+                    $line,
+                    $m
+                )
+            ) {
 
-        } elseif (
-            preg_match(
-                '/\s(\d+)$/u',
-                $line,
-                $m
-            )
-        ) {
+                $isQtyLine = true;
 
-            $isQtyLine = true;
+                $rowQty =
+                    (int) $m[1];
+            }
 
-            $rowQty =
-                (int) $m[1];
-        }
-
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Thêm line vào row
         |--------------------------------------------------------------------------
         */
 
-        $currentRow[] =
-            $line;
+            $currentRow[] =
+                $line;
 
-        /*
+            /*
         |--------------------------------------------------------------------------
         | Nếu kết thúc product row
         |--------------------------------------------------------------------------
         */
 
-        if ($isQtyLine) {
+            if ($isQtyLine) {
 
-            $productRows[] = [
+                $productRows[] = [
 
-                'lines' =>
+                    'lines' =>
                     $currentRow,
 
-                'qty' =>
+                    'qty' =>
                     $rowQty,
 
-            ];
+                ];
 
-            $currentRow = [];
+                $currentRow = [];
+            }
         }
-    }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Nếu còn row cuối
     |--------------------------------------------------------------------------
     */
 
-    if (!empty($currentRow)) {
+        if (!empty($currentRow)) {
 
-        $productRows[] = [
+            $productRows[] = [
 
-            'lines' =>
+                'lines' =>
                 $currentRow,
 
-            'qty' =>
+                'qty' =>
                 1,
 
-        ];
-    }
+            ];
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Không tìm được product row
     |--------------------------------------------------------------------------
     */
 
-    if (empty($productRows)) {
+        if (empty($productRows)) {
 
-        return $result;
-    }
+            return $result;
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Xác định BILL nhiều sản phẩm
     |--------------------------------------------------------------------------
     */
 
-    if (
-        count($productRows) > 1
-    ) {
+        if (
+            count($productRows) > 1
+        ) {
 
-        $result['multi'] = true;
-    }
+            $result['multi'] = true;
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Lấy product đầu tiên làm sort key
     |--------------------------------------------------------------------------
     */
 
-    $firstRow =
-        $productRows[0];
+        $firstRow =
+            $productRows[0];
 
-    $firstLines =
-        $firstRow['lines'];
+        $firstLines =
+            $firstRow['lines'];
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Tìm SKU
     |--------------------------------------------------------------------------
@@ -1236,13 +1226,13 @@ private function extractOrderId($text)
     |
     */
 
-    $firstText =
-        implode(
-            ' ',
-            $firstLines
-        );
+        $firstText =
+            implode(
+                ' ',
+                $firstLines
+            );
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Nếu dòng cuối có dạng:
     |
@@ -1251,121 +1241,121 @@ private function extractOrderId($text)
     |--------------------------------------------------------------------------
     */
 
-    if (
-        preg_match(
-            '/^(.*?)\s+(\d+)$/u',
-            trim($firstText),
-            $m
-        )
-    ) {
+        if (
+            preg_match(
+                '/^(.*?)\s+(\d+)$/u',
+                trim($firstText),
+                $m
+            )
+        ) {
 
-        $result['sku'] =
-            trim($m[1]);
+            $result['sku'] =
+                trim($m[1]);
 
-        $result['qty'] =
-            (int) $m[2];
-    } else {
+            $result['qty'] =
+                (int) $m[2];
+        } else {
 
-        $result['qty'] =
-            (int) $firstRow['qty'];
-    }
+            $result['qty'] =
+                (int) $firstRow['qty'];
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Product
     |--------------------------------------------------------------------------
     */
 
-    $product =
-        implode(
-            ' ',
-            $firstLines
-        );
+        $product =
+            implode(
+                ' ',
+                $firstLines
+            );
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Nếu SKU đang dính vào product
     |--------------------------------------------------------------------------
     */
 
-    if (
-        !empty($result['sku'])
-    ) {
+        if (
+            !empty($result['sku'])
+        ) {
 
-        $product =
-            preg_replace(
-                '/\s+' .
-                preg_quote(
-                    $result['sku'],
-                    '/'
-                ) .
-                '\s*$/u',
-                '',
-                $product
-            );
-    }
+            $product =
+                preg_replace(
+                    '/\s+' .
+                        preg_quote(
+                            $result['sku'],
+                            '/'
+                        ) .
+                        '\s*$/u',
+                    '',
+                    $product
+                );
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Bỏ [ Giá Sỉ ]
     |--------------------------------------------------------------------------
     */
 
-    $product =
-        preg_replace(
-            '/^\[\s*Giá\s*Sỉ\s*\]\s*/iu',
-            '',
-            $product
-        );
+        $product =
+            preg_replace(
+                '/^\[\s*Giá\s*Sỉ\s*\]\s*/iu',
+                '',
+                $product
+            );
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Unicode
     |--------------------------------------------------------------------------
     */
 
-    if (
-        class_exists(
-            '\Normalizer'
-        )
-    ) {
+        if (
+            class_exists(
+                '\Normalizer'
+            )
+        ) {
 
-        $product =
-            \Normalizer::normalize(
-                $product,
-                \Normalizer::FORM_KC
-            );
-    }
+            $product =
+                \Normalizer::normalize(
+                    $product,
+                    \Normalizer::FORM_KC
+                );
+        }
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Khoảng trắng
     |--------------------------------------------------------------------------
     */
 
-    $product =
-        preg_replace(
-            '/\s+/u',
-            ' ',
-            $product
-        );
+        $product =
+            preg_replace(
+                '/\s+/u',
+                ' ',
+                $product
+            );
 
-    $product =
-        trim(
-            $product
-        );
+        $product =
+            trim(
+                $product
+            );
 
-    /*
+        /*
     |--------------------------------------------------------------------------
     | Gán product
     |--------------------------------------------------------------------------
     */
 
-    $result['product'] =
-        $product;
+        $result['product'] =
+            $product;
 
-    return $result;
-}
+        return $result;
+    }
 
     private function createSortedPdf(
         string $inputPdf,
@@ -1385,7 +1375,6 @@ private function extractOrderId($text)
 
             $qpdf =
                 'C:\Program Files\qpdf 12.3.2\bin\qpdf.exe';
-
         } else {
 
             $qpdf =
@@ -1405,7 +1394,7 @@ private function extractOrderId($text)
 
             throw new \Exception(
                 'Không tìm thấy qpdf tại: '
-                . $qpdf
+                    . $qpdf
             );
         }
 
@@ -1422,7 +1411,7 @@ private function extractOrderId($text)
 
             throw new \Exception(
                 'Không tìm thấy PDF gốc: '
-                . $inputPdf
+                    . $inputPdf
             );
         }
 
@@ -1459,17 +1448,17 @@ private function extractOrderId($text)
 
         $repairResult =
             Process::timeout(300)
-                ->run([
+            ->run([
 
-                    $qpdf,
+                $qpdf,
 
-                    '--warning-exit-0',
+                '--warning-exit-0',
 
-                    $inputPdf,
+                $inputPdf,
 
-                    $repairedPdf,
+                $repairedPdf,
 
-                ]);
+            ]);
 
 
         /*
@@ -1487,14 +1476,14 @@ private function extractOrderId($text)
 
                 "Không thể repair PDF TikTok.\n\n"
 
-                . "Input:\n"
-                . $inputPdf
+                    . "Input:\n"
+                    . $inputPdf
 
-                . "\n\nQPDF error:\n"
-                . $repairResult->errorOutput()
+                    . "\n\nQPDF error:\n"
+                    . $repairResult->errorOutput()
 
-                . "\n\nQPDF output:\n"
-                . $repairResult->output()
+                    . "\n\nQPDF output:\n"
+                    . $repairResult->output()
             );
         }
 
@@ -1507,17 +1496,17 @@ private function extractOrderId($text)
 
         $countResult =
             Process::timeout(300)
-                ->run([
+            ->run([
 
-                    $qpdf,
+                $qpdf,
 
-                    '--warning-exit-0',
+                '--warning-exit-0',
 
-                    '--show-npages',
+                '--show-npages',
 
-                    $repairedPdf,
+                $repairedPdf,
 
-                ]);
+            ]);
 
 
         $countOutput =
@@ -1543,11 +1532,11 @@ private function extractOrderId($text)
 
                 "Không thể đọc số trang PDF sau khi repair.\n\n"
 
-                . "QPDF error:\n"
-                . $countResult->errorOutput()
+                    . "QPDF error:\n"
+                    . $countResult->errorOutput()
 
-                . "\n\nQPDF output:\n"
-                . $countResult->output()
+                    . "\n\nQPDF output:\n"
+                    . $countResult->output()
             );
         }
 
@@ -1615,9 +1604,9 @@ private function extractOrderId($text)
 
                 "Không có trang hợp lệ.\n"
 
-                . "PDF có "
-                . $totalPages
-                . " trang."
+                    . "PDF có "
+                    . $totalPages
+                    . " trang."
             );
         }
 
@@ -1670,7 +1659,7 @@ private function extractOrderId($text)
 
         $result =
             Process::timeout(300)
-                ->run($command);
+            ->run($command);
 
 
         /*
@@ -1693,26 +1682,26 @@ private function extractOrderId($text)
 
                 "Không thể tạo PDF đã sắp xếp.\n\n"
 
-                . "Input:\n"
-                . $inputPdf
+                    . "Input:\n"
+                    . $inputPdf
 
-                . "\n\nOutput:\n"
-                . $outputPdf
+                    . "\n\nOutput:\n"
+                    . $outputPdf
 
-                . "\n\nTổng số trang: "
-                . $totalPages
+                    . "\n\nTổng số trang: "
+                    . $totalPages
 
-                . "\n\nTrang yêu cầu:\n"
-                . implode(',', $pages)
+                    . "\n\nTrang yêu cầu:\n"
+                    . implode(',', $pages)
 
-                . "\n\nTrang hợp lệ:\n"
-                . implode(',', $validPages)
+                    . "\n\nTrang hợp lệ:\n"
+                    . implode(',', $validPages)
 
-                . "\n\nQPDF error:\n"
-                . $result->errorOutput()
+                    . "\n\nQPDF error:\n"
+                    . $result->errorOutput()
 
-                . "\n\nQPDF output:\n"
-                . $result->output()
+                    . "\n\nQPDF output:\n"
+                    . $result->output()
             );
         }
 
@@ -1766,36 +1755,20 @@ private function extractOrderId($text)
     |--------------------------------------------------------------------------
     */
 
-    public function download()
+    public function download($filename)
 {
-    $file = session('tiktok_sorted_pdf');
+    $filename = basename($filename);
 
-    $filename = session(
-        'tiktok_sorted_filename',
-        'bill_tiktok_da_sap_xep.pdf'
+    $file = storage_path(
+        'app/pdf-sorter/' . $filename
     );
 
-    /*
-    |--------------------------------------------------------------------------
-    | Kiểm tra file
-    |--------------------------------------------------------------------------
-    */
-
-    if (!$file || !file_exists($file)) {
-
-        abort(
-            404,
-            'Không tìm thấy file PDF TikTok đã sắp xếp.'
-        );
+    if (!file_exists($file)) {
+        abort(404, 'Không tìm thấy file PDF.');
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | Tạo response download
-    |--------------------------------------------------------------------------
-    */
-
-    return response()->download($file,$filename)
-    ->deleteFileAfterSend(true);
+    return response()
+        ->download($file, $filename)
+        ->deleteFileAfterSend(true);
 }
 }

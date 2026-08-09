@@ -476,12 +476,7 @@
             </button>
 
 
-            <a
-                class="btn download"
-                href="{{ route('shopee.download') }}"
-            >
-                ⬇️ Tải PDF
-            </a>
+           
 
         </div>
 
@@ -744,8 +739,8 @@ function copyPage(id, button)
 
 </body>
 <script>
-window.addEventListener('load', function () {
-    window.location.href = "{{ route('shopee.download') }}";
+document.addEventListener('DOMContentLoaded', function () {
+    window.location.href = "{{ route('shopee.download', ['filename' => $filename]) }}";
 });
 </script>
 </html>

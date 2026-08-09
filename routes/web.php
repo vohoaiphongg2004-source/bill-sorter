@@ -24,9 +24,10 @@ Route::get('/', [BillController::class, 'index'])
 Route::post('/tiktok/upload', [BillController::class, 'upload'])
     ->name('upload');
 
-Route::get('/tiktok/download', [BillController::class, 'download'])
-    ->name('tiktok.download');
-
+Route::get(
+    '/tiktok/download/{filename}',
+    [BillController::class, 'download']
+)->name('tiktok.download');
 
 /*
 |--------------------------------------------------------------------------
@@ -40,7 +41,8 @@ Route::get('/shopee', [ShopeeController::class, 'index'])
 Route::post('/shopee-upload', [ShopeeController::class, 'upload'])
     ->name('shopee.upload');
 
-Route::get('/shopee-download', [ShopeeController::class, 'download'])
+
+Route::get('/shopee/download/{filename}', [ShopeeController::class, 'download'])
     ->name('shopee.download');
 
 
