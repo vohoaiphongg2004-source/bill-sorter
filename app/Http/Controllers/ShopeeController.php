@@ -1245,12 +1245,7 @@ class ShopeeController extends Controller
     |--------------------------------------------------------------------------
     */
 
-    return response()->download(
-        $file,
-        $filename,
-        [
-            'Content-Type' => 'application/pdf',
-        ]
-    );
+    return response()->download($file,$filename)
+    ->deleteFileAfterSend(true);
 }
 }
