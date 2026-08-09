@@ -1767,49 +1767,40 @@ private function extractOrderId($text)
     */
 
     public function download()
-    {
-        $file =
-            session(
-                'tiktok_sorted_pdf'
-            );
+{
+    $file = session('tiktok_sorted_pdf');
 
+    $filename = session(
+        'tiktok_sorted_filename',
+        'bill_tiktok_da_sap_xep.pdf'
+    );
 
-        $filename =
-            session(
-                'tiktok_sorted_filename',
-                'bill_tiktok_da_sap_xep.pdf'
-            );
+    /*
+    |--------------------------------------------------------------------------
+    | Kiểm tra file
+    |--------------------------------------------------------------------------
+    */
 
+    if (!$file || !file_exists($file)) {
 
-        /*
-        |--------------------------------------------------------------------------
-        | Kiểm tra
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            !$file ||
-            !file_exists($file)
-        ) {
-
-            abort(
-                404,
-                'Không tìm thấy file PDF TikTok đã sắp xếp.'
-            );
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Download
-        |--------------------------------------------------------------------------
-        */
-
-        return response()
-            ->download(
-                $file,
-                $filename
-            )
-            ->deleteFileAfterSend(true);
+        abort(
+            404,
+            'Không tìm thấy file PDF TikTok đã sắp xếp.'
+        );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Tạo response download
+    |--------------------------------------------------------------------------
+    */
+
+    return response()->download(
+        $file,
+        $filename,
+        [
+            'Content-Type' => 'application/pdf',
+        ]
+    );
+}
 }

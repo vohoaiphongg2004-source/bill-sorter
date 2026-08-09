@@ -1217,51 +1217,40 @@ class ShopeeController extends Controller
     */
 
     public function download()
-    {
+{
+    $file = session('shopee_sorted_pdf');
 
-        $file =
-            session(
-                'shopee_sorted_pdf'
-            );
+    $filename = session(
+        'shopee_sorted_filename',
+        'bill_shopee_da_sap_xep.pdf'
+    );
 
+    /*
+    |--------------------------------------------------------------------------
+    | Kiểm tra file
+    |--------------------------------------------------------------------------
+    */
 
-        $filename =
-            session(
-                'shopee_sorted_filename',
-                'bill_shopee_da_sap_xep.pdf'
-            );
+    if (!$file || !file_exists($file)) {
 
-
-        /*
-        |--------------------------------------------------------------------------
-        | Kiểm tra file
-        |--------------------------------------------------------------------------
-        */
-
-        if (
-            !$file
-            ||
-            !file_exists($file)
-        ) {
-
-            abort(
-                404,
-                'Không tìm thấy file PDF.'
-            );
-        }
-
-
-        /*
-        |--------------------------------------------------------------------------
-        | Download
-        |--------------------------------------------------------------------------
-        */
-
-        return response()
-            ->download(
-                $file,
-                'bill_shopee_da_sap_xep.pdf'
-            )
-            ->deleteFileAfterSend(true);
+        abort(
+            404,
+            'Không tìm thấy file PDF Shopee đã sắp xếp.'
+        );
     }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Download PDF
+    |--------------------------------------------------------------------------
+    */
+
+    return response()->download(
+        $file,
+        $filename,
+        [
+            'Content-Type' => 'application/pdf',
+        ]
+    );
+}
 }
